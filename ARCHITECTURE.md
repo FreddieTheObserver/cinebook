@@ -48,6 +48,7 @@ Docker Desktop 29 on Windows has WSL integration enabled for Ubuntu, so `docker 
 
 Total direct dependency count is five.
 That is deliberate.
+`testcontainers` ships its Postgres helper as a separate module, so it accounts for two `require` lines on its own.
 
 ## 4. The concurrency model
 
@@ -266,7 +267,8 @@ Defaults chosen, all configurable, all open to revision per section 12: hold TTL
       seed/*.sql             dev and test fixtures, never applied in production
       queries/*.sql          sqlc input, the SQL that matters
       gen/                   sqlc output, generated
-      store.go tx.go         pool, transaction helper, error classification
+      store.go tx.go         pool, transaction helper
+      errors.go              Postgres error codes to sentinels
     httpapi/                 handlers, middleware, problem+json
     obs/                     slog, prometheus, health
   compose.yaml               Postgres 18 for local dev

@@ -7,6 +7,7 @@ import (
 	"github.com/FreddieTheObserver/cinebook/internal/store"
 )
 
+// Sentinels the HTTP layer maps onto status codes.
 var (
 	ErrNotFound             = errors.New("not found")
 	ErrHoldExpired          = errors.New("hold expired")
@@ -17,21 +18,21 @@ var (
 	ErrBusy                 = errors.New("busy")
 )
 
-// SeatsUnavailable names the seats that blocked a hold, so a client can
-// re-render the map without a second round trip.
+// SeatsUnavailable carries the blocking seat ids, so a client can re-render the
+// map without a second round trip.
 type SeatsUnavailable struct {
 	SeatIDs []int64
 	cause   error
 }
 
+// Error implements error.
 func (e *SeatsUnavailable) Error() string {
 	return fmt.Sprintf("seats unavailable: %v", e.SeatIDs)
 }
 
+// Unwrap exposes the store error underneath, which may be store.ErrSeatRaceLost.
 func (e *SeatsUnavailable) Unwrap() error { return e.cause }
 
-// fromStore restates a store error in domain terms. Anything already expressed
-// as a domain error passes through untouched.
 func fromStore(err error) error {
 	switch {
 	case err == nil:

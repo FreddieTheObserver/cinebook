@@ -8,9 +8,9 @@ import (
 	"github.com/FreddieTheObserver/cinebook/internal/store/gen"
 )
 
-// Sweep reclaims lapsed holds ahead of the next contender for their seats. It
-// keeps the table small and gives expiry a number to report. Correctness does
-// not depend on it running, so a busy showtime is skipped rather than waited on.
+// Sweep reclaims lapsed holds ahead of the next contender for their seats.
+// Correctness does not depend on it running, so a busy showtime is skipped
+// rather than waited on.
 func (s *Service) Sweep(ctx context.Context, limit int32) (int64, error) {
 	showtimes, err := s.store.ListShowtimesWithExpiredSeats(ctx, limit)
 	if err != nil {

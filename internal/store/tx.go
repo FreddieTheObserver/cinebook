@@ -9,11 +9,11 @@ import (
 	"github.com/FreddieTheObserver/cinebook/internal/store/gen"
 )
 
+// TxFunc is a transaction body, run against queries bound to that transaction.
 type TxFunc func(ctx context.Context, q *gen.Queries) error
 
-// InShowtimeTx takes the per-showtime advisory lock before running fn, so a
-// caller cannot forget it. Seat mutation for one showtime is therefore strictly
-// serial, while other showtimes proceed in parallel.
+// InShowtimeTx runs fn under the per-showtime advisory lock. The lock is taken
+// here rather than by callers, so a seat write path cannot forget it.
 func (s *Store) InShowtimeTx(ctx context.Context, showtimeID int64, fn TxFunc) error {
 	return s.InTx(ctx, func(ctx context.Context, q *gen.Queries) error {
 		if err := q.LockShowtime(ctx, showtimeID); err != nil {
@@ -23,8 +23,8 @@ func (s *Store) InShowtimeTx(ctx context.Context, showtimeID int64, fn TxFunc) e
 	})
 }
 
-// InTx runs fn in a READ COMMITTED transaction bounded by the configured lock
-// and statement timeouts. The returned error is always classified.
+// InTx runs fn in a READ COMMITTED transaction bounded by the configured
+// timeouts. Errors out of here are always classified.
 func (s *Store) InTx(ctx context.Context, fn TxFunc) error {
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {

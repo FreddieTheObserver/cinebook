@@ -11,8 +11,8 @@ import (
 
 const refAttempts = 5
 
-// Confirm turns a live hold into a booking. Replaying it returns the booking
-// that already exists rather than making a second one.
+// Confirm turns a live hold into a booking. A replay returns the booking that
+// already exists rather than making a second one.
 func (s *Service) Confirm(ctx context.Context, token, idempotencyKey string) (*Booking, error) {
 	if idempotencyKey == "" {
 		return nil, fmt.Errorf("%w: an idempotency key is required", ErrInvalidSelection)
@@ -101,7 +101,7 @@ func (s *Service) Confirm(ctx context.Context, token, idempotencyKey string) (*B
 	return &result, nil
 }
 
-// Booking reads take no lock.
+// GetBooking looks one up by reference. Booking reads take no lock.
 func (s *Service) GetBooking(ctx context.Context, ref string) (*Booking, error) {
 	booked, err := s.store.GetBookingByRef(ctx, ref)
 	if err != nil {
@@ -115,8 +115,7 @@ func (s *Service) GetBooking(ctx context.Context, ref string) (*Booking, error) 
 	return &b, nil
 }
 
-// insertBooking retries only a collided reference. Anything else is either a
-// real conflict or a real error.
+// Only a collided reference is retryable.
 func insertBooking(ctx context.Context, q *gen.Queries, held gen.GetHoldByTokenRow, showtime gen.GetShowtimeRow, total int64, idempotencyKey string) (gen.Booking, error) {
 	for range refAttempts {
 		ref, err := newBookingRef()

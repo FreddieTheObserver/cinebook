@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// Sentinels that Classify maps Postgres conditions onto.
 var (
 	ErrNotFound = errors.New("not found")
 
@@ -37,13 +38,12 @@ const (
 	constraintBookingHold    = "bookings_hold_id_key"
 )
 
-// IsInsertConflict reports whether an insert written as ON CONFLICT DO NOTHING
-// was suppressed. It returns no row rather than aborting the transaction, so
-// the caller decides which constraint it was and what that means.
+// IsInsertConflict reports whether an ON CONFLICT DO NOTHING insert was
+// suppressed. It returns no row instead of aborting the transaction, leaving
+// the caller to work out which constraint it hit.
 func IsInsertConflict(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
 
-// Classify maps a Postgres error onto a sentinel the caller can branch on,
-// keeping the original for logging.
+// Classify maps a Postgres error onto a sentinel, keeping the original in the chain.
 func Classify(err error) error {
 	if err == nil {
 		return nil

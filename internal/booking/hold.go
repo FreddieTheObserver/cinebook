@@ -102,8 +102,8 @@ func (s *Service) Hold(ctx context.Context, showtimeID int64, customerRef string
 	return &result, nil
 }
 
-// GetHold reports a hold and its seats. It takes no lock, so like a seat map it
-// is a snapshot rather than an authority.
+// GetHold reports a hold and its seats. No lock, so this is a snapshot rather
+// than an authority.
 func (s *Service) GetHold(ctx context.Context, token string) (*Hold, error) {
 	held, err := s.store.GetHoldByToken(ctx, token)
 	if err != nil {
@@ -135,7 +135,7 @@ func (s *Service) GetHold(ctx context.Context, token string) (*Hold, error) {
 	}, nil
 }
 
-// Release gives the seats back before the TTL lapses.
+// Release gives seats back before the TTL lapses.
 func (s *Service) Release(ctx context.Context, token string) error {
 	held, err := s.store.GetHoldByToken(ctx, token)
 	if err != nil {
@@ -180,9 +180,8 @@ func seatsFromHold(rows []gen.GetHoldSeatsRow, status SeatStatus) []Seat {
 	return seats
 }
 
-// holdError keeps a lost race with the unique index readable as a seat
-// conflict, while leaving the store error in the chain for logging. Section 4.1
-// means reaching that branch at all is a bug signal.
+// A lost race with the unique index still reads as a seat conflict to the
+// client, but per section 4.1 reaching that branch at all is a bug signal.
 func holdError(err error, requested []int64) error {
 	if errors.Is(err, store.ErrSeatRaceLost) {
 		return &SeatsUnavailable{SeatIDs: requested, cause: err}
@@ -190,7 +189,6 @@ func holdError(err error, requested []int64) error {
 	return fromStore(err)
 }
 
-// normalizeSeats validates a selection and puts it in a deterministic order.
 func normalizeSeats(ids []int64, max int) ([]int64, error) {
 	if len(ids) == 0 {
 		return nil, fmt.Errorf("%w: no seats requested", ErrInvalidSelection)

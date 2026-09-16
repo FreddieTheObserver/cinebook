@@ -23,6 +23,7 @@ const (
 	defaultStatementTimeout = 5 * time.Second
 )
 
+// Config is the pool and timeout configuration for a Store.
 type Config struct {
 	DSN              string
 	MaxConns         int32
@@ -42,8 +43,8 @@ func (c *Config) applyDefaults() {
 	}
 }
 
-// Store owns the pool. The embedded Queries serve read paths directly, which
-// take no transaction and no lock, and whose errors are raw: call Classify.
+// Store owns the connection pool. Read paths go through the embedded Queries:
+// no transaction, no lock, and raw errors the caller must put through Classify.
 type Store struct {
 	*gen.Queries
 
@@ -51,6 +52,7 @@ type Store struct {
 	cfg  Config
 }
 
+// New opens the pool and verifies it can reach the database.
 func New(ctx context.Context, cfg Config) (*Store, error) {
 	cfg.applyDefaults()
 
@@ -74,14 +76,17 @@ func New(ctx context.Context, cfg Config) (*Store, error) {
 	return &Store{Queries: gen.New(pool), pool: pool, cfg: cfg}, nil
 }
 
+// Close releases the pool and every connection in it.
 func (s *Store) Close() { s.pool.Close() }
 
+// Ping reports whether the pool can still reach the database.
 func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
 
+// Pool exposes the underlying pool for callers that need it directly.
 func (s *Store) Pool() *pgxpool.Pool { return s.pool }
 
-// Migrate applies the embedded migrations through a temporary database/sql
-// handle over the same pool, so no second driver is configured.
+// Migrate applies the embedded migrations. goose needs database/sql, so it
+// borrows the existing pool rather than having a second driver configured.
 func (s *Store) Migrate(ctx context.Context) error {
 	sub, err := fs.Sub(migrationsFS, "migrations")
 	if err != nil {

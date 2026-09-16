@@ -27,8 +27,7 @@ func (s *Service) SeatMap(ctx context.Context, showtimeID int64) (*SeatMap, erro
 	}, nil
 }
 
-// projectSeatRows groups the flat result into rows. The query orders by row
-// label then seat number, so one pass is enough.
+// The query orders by row label then seat number, so one pass is enough.
 func projectSeatRows(rows []gen.GetSeatMapRow) []SeatRow {
 	out := []SeatRow{}
 	for _, r := range rows {

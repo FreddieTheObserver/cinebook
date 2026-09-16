@@ -522,6 +522,34 @@ func TestListShowtimesFilters(t *testing.T) {
 	}
 }
 
+func TestGetShowtimeNamesTheMovieAndAuditorium(t *testing.T) {
+	svc, st := newService(t, options{})
+	ctx := t.Context()
+	showtimeID, _ := showtimeSeats(t, st, 1)
+
+	got, err := svc.GetShowtime(ctx, showtimeID)
+	if err != nil {
+		t.Fatalf("get showtime: %v", err)
+	}
+
+	listed, err := svc.ListShowtimes(ctx, ShowtimeFilter{})
+	if err != nil {
+		t.Fatalf("list showtimes: %v", err)
+	}
+	for _, s := range listed {
+		if s.ID == showtimeID && s != *got {
+			t.Fatalf("got %+v, but the list says %+v", *got, s)
+		}
+	}
+	if got.MovieTitle == "" || got.AuditoriumName == "" {
+		t.Fatalf("names missing: %+v", *got)
+	}
+
+	if _, err := svc.GetShowtime(ctx, 1<<40); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unknown showtime: got %v, want ErrNotFound", err)
+	}
+}
+
 func TestSweepReclaimsLapsedHolds(t *testing.T) {
 	svc, st := newService(t, options{ttl: time.Second})
 	ctx := t.Context()

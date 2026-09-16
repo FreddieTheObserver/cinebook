@@ -355,6 +355,12 @@ func TestBookingJourney(t *testing.T) {
 		}
 	}
 
+	detail := decode[showtimeJSON](t, expectStatus(t, e.get(t, fmt.Sprintf("/v1/showtimes/%d", showtimeID)), http.StatusOK))
+	if detail.ID != showtimeID || detail.MovieTitle == "" || detail.AuditoriumName == "" {
+		t.Fatalf("unexpected showtime: %+v", detail)
+	}
+	expectProblem(t, e.get(t, "/v1/showtimes/1099511627776"), http.StatusNotFound, "not-found")
+
 	seatMapPath := fmt.Sprintf("/v1/showtimes/%d/seats", showtimeID)
 	before := decode[seatMapJSON](t, expectStatus(t, e.get(t, seatMapPath), http.StatusOK))
 	for _, id := range seats {
@@ -448,11 +454,15 @@ func TestWireShapes(t *testing.T) {
 	movies := expectStatus(t, e.get(t, "/v1/movies"), http.StatusOK).body
 	expect(t, "movie", first(t, field(t, movies, "movies")), "id", "title", "runtime_min", "rating")
 
+	showtimeKeys := []string{
+		"id", "movie_id", "movie_title", "auditorium_id", "auditorium_name",
+		"starts_at", "ends_at", "price_minor", "currency", "sales_open",
+	}
 	showtimes := expectStatus(t, e.get(t, "/v1/showtimes"), http.StatusOK).body
 	showtime := first(t, field(t, showtimes, "showtimes"))
-	expect(t, "showtime", showtime,
-		"id", "movie_id", "movie_title", "auditorium_id", "auditorium_name",
-		"starts_at", "ends_at", "price_minor", "currency", "sales_open")
+	expect(t, "listed showtime", showtime, showtimeKeys...)
+	single := expectStatus(t, e.get(t, fmt.Sprintf("/v1/showtimes/%d", showtimeID)), http.StatusOK).body
+	expect(t, "single showtime", single, showtimeKeys...)
 	if starts := string(field(t, showtime, "starts_at")); !strings.HasSuffix(starts, `Z"`) {
 		t.Errorf("starts_at %s is not UTC", starts)
 	}
@@ -668,6 +678,7 @@ func TestMalformedIdentifiersAreNotFound(t *testing.T) {
 		"/v1/holds/%FF%FE",
 		"/v1/bookings/CB-%00",
 		"/v1/showtimes/0/seats",
+		"/v1/showtimes/-1",
 		"/v1/showtimes/99999999999999999999/seats",
 	} {
 		expectProblem(t, e.get(t, path), http.StatusNotFound, "not-found")

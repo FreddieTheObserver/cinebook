@@ -236,6 +236,7 @@ Versioned under `/v1`, JSON in and out, errors as `application/problem+json`.
 ```
 GET    /v1/movies
 GET    /v1/showtimes?movie_id=&from=&to=
+GET    /v1/showtimes/{id}
 GET    /v1/showtimes/{id}/seats        seat map: free | held | sold
 POST   /v1/showtimes/{id}/holds        -> token, expires_at, seats, total_minor
 GET    /v1/holds/{token}

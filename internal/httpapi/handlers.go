@@ -28,6 +28,18 @@ func (a *api) listShowtimes(w http.ResponseWriter, r *http.Request) error {
 	}{showtimesFrom(showtimes)})
 }
 
+func (a *api) getShowtime(w http.ResponseWriter, r *http.Request) error {
+	showtimeID, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	showtime, err := a.svc.GetShowtime(r.Context(), showtimeID)
+	if err != nil {
+		return err
+	}
+	return writeJSON(w, http.StatusOK, showtimeFrom(*showtime))
+}
+
 func (a *api) seatMap(w http.ResponseWriter, r *http.Request) error {
 	showtimeID, err := pathID(r, "id")
 	if err != nil {

@@ -45,6 +45,48 @@ func (q *Queries) GetShowtime(ctx context.Context, id int64) (GetShowtimeRow, er
 	return i, err
 }
 
+const getShowtimeDetail = `-- name: GetShowtimeDetail :one
+SELECT s.id, s.movie_id, s.auditorium_id, s.starts_at, s.ends_at,
+       s.price_minor, s.currency, s.sales_open,
+       m.title AS movie_title,
+       a.name  AS auditorium_name
+  FROM showtimes s
+  JOIN movies m      ON m.id = s.movie_id
+  JOIN auditoriums a ON a.id = s.auditorium_id
+ WHERE s.id = $1
+`
+
+type GetShowtimeDetailRow struct {
+	ID             int64
+	MovieID        int64
+	AuditoriumID   int64
+	StartsAt       time.Time
+	EndsAt         time.Time
+	PriceMinor     int64
+	Currency       string
+	SalesOpen      bool
+	MovieTitle     string
+	AuditoriumName string
+}
+
+func (q *Queries) GetShowtimeDetail(ctx context.Context, id int64) (GetShowtimeDetailRow, error) {
+	row := q.db.QueryRow(ctx, getShowtimeDetail, id)
+	var i GetShowtimeDetailRow
+	err := row.Scan(
+		&i.ID,
+		&i.MovieID,
+		&i.AuditoriumID,
+		&i.StartsAt,
+		&i.EndsAt,
+		&i.PriceMinor,
+		&i.Currency,
+		&i.SalesOpen,
+		&i.MovieTitle,
+		&i.AuditoriumName,
+	)
+	return i, err
+}
+
 const listMovies = `-- name: ListMovies :many
 SELECT id, title, runtime_min, rating
   FROM movies

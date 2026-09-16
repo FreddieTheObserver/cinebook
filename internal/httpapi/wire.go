@@ -91,20 +91,24 @@ func moviesFrom(movies []booking.Movie) []movieJSON {
 func showtimesFrom(showtimes []booking.Showtime) []showtimeJSON {
 	out := make([]showtimeJSON, 0, len(showtimes))
 	for _, s := range showtimes {
-		out = append(out, showtimeJSON{
-			ID:             s.ID,
-			MovieID:        s.MovieID,
-			MovieTitle:     s.MovieTitle,
-			AuditoriumID:   s.AuditoriumID,
-			AuditoriumName: s.AuditoriumName,
-			StartsAt:       s.StartsAt.UTC(),
-			EndsAt:         s.EndsAt.UTC(),
-			PriceMinor:     s.PriceMinor,
-			Currency:       s.Currency,
-			SalesOpen:      s.SalesOpen,
-		})
+		out = append(out, showtimeFrom(s))
 	}
 	return out
+}
+
+func showtimeFrom(s booking.Showtime) showtimeJSON {
+	return showtimeJSON{
+		ID:             s.ID,
+		MovieID:        s.MovieID,
+		MovieTitle:     s.MovieTitle,
+		AuditoriumID:   s.AuditoriumID,
+		AuditoriumName: s.AuditoriumName,
+		StartsAt:       s.StartsAt.UTC(),
+		EndsAt:         s.EndsAt.UTC(),
+		PriceMinor:     s.PriceMinor,
+		Currency:       s.Currency,
+		SalesOpen:      s.SalesOpen,
+	}
 }
 
 func seatMapFrom(m *booking.SeatMap) seatMapJSON {

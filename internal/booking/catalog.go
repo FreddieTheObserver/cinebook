@@ -68,18 +68,33 @@ func (s *Service) ListShowtimes(ctx context.Context, f ShowtimeFilter) ([]Showti
 	}
 	showtimes := make([]Showtime, 0, len(rows))
 	for _, r := range rows {
-		showtimes = append(showtimes, Showtime{
-			ID:             r.ID,
-			MovieID:        r.MovieID,
-			MovieTitle:     r.MovieTitle,
-			AuditoriumID:   r.AuditoriumID,
-			AuditoriumName: r.AuditoriumName,
-			StartsAt:       r.StartsAt,
-			EndsAt:         r.EndsAt,
-			PriceMinor:     r.PriceMinor,
-			Currency:       r.Currency,
-			SalesOpen:      r.SalesOpen,
-		})
+		showtimes = append(showtimes, showtimeFrom(r))
 	}
 	return showtimes, nil
+}
+
+// GetShowtime returns one screening with its movie and auditorium named.
+func (s *Service) GetShowtime(ctx context.Context, id int64) (*Showtime, error) {
+	row, err := s.store.GetShowtimeDetail(ctx, id)
+	if err != nil {
+		return nil, fromStore(store.Classify(err))
+	}
+	// Both queries select the same columns, so the rows convert.
+	showtime := showtimeFrom(gen.ListShowtimesRow(row))
+	return &showtime, nil
+}
+
+func showtimeFrom(r gen.ListShowtimesRow) Showtime {
+	return Showtime{
+		ID:             r.ID,
+		MovieID:        r.MovieID,
+		MovieTitle:     r.MovieTitle,
+		AuditoriumID:   r.AuditoriumID,
+		AuditoriumName: r.AuditoriumName,
+		StartsAt:       r.StartsAt,
+		EndsAt:         r.EndsAt,
+		PriceMinor:     r.PriceMinor,
+		Currency:       r.Currency,
+		SalesOpen:      r.SalesOpen,
+	}
 }

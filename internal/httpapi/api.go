@@ -60,6 +60,7 @@ func New(svc *booking.Service, log *slog.Logger, observer Observer, cfg Config) 
 
 	a.handle("GET /v1/movies", a.listMovies)
 	a.handle("GET /v1/showtimes", a.listShowtimes)
+	a.handle("GET /v1/showtimes/{id}", a.getShowtime)
 	a.handle("GET /v1/showtimes/{id}/seats", a.seatMap)
 	a.handle("POST /v1/showtimes/{id}/holds", a.createHold)
 	a.handle("GET /v1/holds/{token}", a.getHold)

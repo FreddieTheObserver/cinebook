@@ -151,6 +151,47 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestConcurrentMigrationsOnAFreshDatabase(t *testing.T) {
+	admin := newTestStore(t)
+	const name = "migrate_race"
+	if _, err := admin.pool.Exec(t.Context(), "DROP DATABASE IF EXISTS "+name); err != nil {
+		t.Fatalf("drop database: %v", err)
+	}
+	if _, err := admin.pool.Exec(t.Context(), "CREATE DATABASE "+name); err != nil {
+		t.Fatalf("create database: %v", err)
+	}
+
+	dsn := strings.Replace(testDSN, "/cinebook?", "/"+name+"?", 1)
+	if dsn == testDSN {
+		t.Fatalf("could not point %q at the fresh database", testDSN)
+	}
+	const replicas = 6
+	errs := make(chan error, replicas)
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for range replicas {
+		wg.Go(func() {
+			s, err := New(t.Context(), Config{DSN: dsn, MaxConns: 4})
+			if err != nil {
+				errs <- err
+				return
+			}
+			defer s.Close()
+			<-start
+			errs <- s.Migrate(t.Context())
+		})
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Errorf("replica migration failed: %v", err)
+		}
+	}
+}
+
 func TestHoldMarksSeatsHeld(t *testing.T) {
 	s := newTestStore(t)
 	ctx := t.Context()

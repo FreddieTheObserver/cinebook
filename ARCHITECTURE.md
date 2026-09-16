@@ -79,6 +79,8 @@ It does not entangle seat booking with unrelated metadata updates to the showtim
 
 The tradeoff is that the advisory lock keyspace is global per database.
 We reserve the single-argument advisory keyspace exclusively for showtime serialization, and document it here so a future feature does not collide with it.
+Anything else takes the two-argument form.
+Class 1 serializes migrations when several replicas start at once, which is also why goose's own Postgres locker is not used: it takes a single-argument lock.
 
 **A hard uniqueness invariant.**
 Serialization is how we intend to be correct.

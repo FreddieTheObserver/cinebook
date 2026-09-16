@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"embed"
 	"fmt"
 	"io/fs"
@@ -96,12 +97,34 @@ func (s *Store) Migrate(ctx context.Context) error {
 	db := stdlib.OpenDBFromPool(s.pool)
 	defer db.Close()
 
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, sub)
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, sub, goose.WithSessionLocker(migrationLocker{}))
 	if err != nil {
 		return fmt.Errorf("goose provider: %w", err)
 	}
 	if _, err := provider.Up(ctx); err != nil {
 		return fmt.Errorf("migrate up: %w", err)
+	}
+	return nil
+}
+
+// Replicas that start together would otherwise race to apply the same
+// migrations. goose's own Postgres locker takes a single-argument advisory
+// lock, a keyspace section 4.1 reserves for showtimes, so this one uses the
+// two-argument form.
+type migrationLocker struct{}
+
+const advisoryClassMigrations = 1
+
+func (migrationLocker) SessionLock(ctx context.Context, conn *sql.Conn) error {
+	if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_lock($1, 0)`, advisoryClassMigrations); err != nil {
+		return fmt.Errorf("take migration lock: %w", err)
+	}
+	return nil
+}
+
+func (migrationLocker) SessionUnlock(ctx context.Context, conn *sql.Conn) error {
+	if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_unlock($1, 0)`, advisoryClassMigrations); err != nil {
+		return fmt.Errorf("release migration lock: %w", err)
 	}
 	return nil
 }

@@ -265,7 +265,7 @@ Defaults chosen, all configurable, all open to revision per section 12: hold TTL
   cmd/cinebook-loadgen/      contention load generator
   internal/
     config/                  env parsing
-    booking/                 domain: hold, confirm, release, expire, seat map
+    booking/                 domain: hold, confirm, release, expire, seat map, catalog
     store/
       migrations/*.sql       goose, embedded
       seed/*.sql             dev and test fixtures, never applied in production

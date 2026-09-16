@@ -464,6 +464,64 @@ func TestSeatMapReportsFreeHeldAndSold(t *testing.T) {
 	}
 }
 
+func TestListMoviesOrdersByTitle(t *testing.T) {
+	svc, st := newService(t, options{})
+
+	movies, err := svc.ListMovies(t.Context())
+	if err != nil {
+		t.Fatalf("list movies: %v", err)
+	}
+	if want := countRows(t, st, `SELECT count(*) FROM movies`); int64(len(movies)) != want {
+		t.Fatalf("got %d movies, want %d", len(movies), want)
+	}
+	for i := 1; i < len(movies); i++ {
+		if movies[i].Title < movies[i-1].Title {
+			t.Fatalf("not ordered by title: %q before %q", movies[i-1].Title, movies[i].Title)
+		}
+	}
+}
+
+func TestListShowtimesFilters(t *testing.T) {
+	svc, st := newService(t, options{})
+	ctx := t.Context()
+
+	all, err := svc.ListShowtimes(ctx, ShowtimeFilter{})
+	if err != nil {
+		t.Fatalf("list all: %v", err)
+	}
+	if want := countRows(t, st, `SELECT count(*) FROM showtimes`); int64(len(all)) != want {
+		t.Fatalf("got %d showtimes, want %d", len(all), want)
+	}
+	for i := 1; i < len(all); i++ {
+		if all[i].StartsAt.Before(all[i-1].StartsAt) {
+			t.Fatalf("not ordered by start: %v before %v", all[i-1].StartsAt, all[i].StartsAt)
+		}
+	}
+
+	movieID := all[0].MovieID
+	byMovie, err := svc.ListShowtimes(ctx, ShowtimeFilter{MovieID: movieID})
+	if err != nil {
+		t.Fatalf("list by movie: %v", err)
+	}
+	if want := countRows(t, st, `SELECT count(*) FROM showtimes WHERE movie_id = $1`, movieID); int64(len(byMovie)) != want {
+		t.Fatalf("got %d showtimes for movie %d, want %d", len(byMovie), movieID, want)
+	}
+	for _, s := range byMovie {
+		if s.MovieID != movieID {
+			t.Fatalf("showtime %d is for movie %d, want %d", s.ID, s.MovieID, movieID)
+		}
+	}
+
+	from, before := all[1].StartsAt, all[3].StartsAt
+	window, err := svc.ListShowtimes(ctx, ShowtimeFilter{StartsFrom: from, StartsBefore: before})
+	if err != nil {
+		t.Fatalf("list window: %v", err)
+	}
+	if len(window) != 2 || window[0].ID != all[1].ID || window[1].ID != all[2].ID {
+		t.Fatalf("window [%v, %v) returned %+v, want showtimes %d and %d", from, before, window, all[1].ID, all[2].ID)
+	}
+}
+
 func TestSweepReclaimsLapsedHolds(t *testing.T) {
 	svc, st := newService(t, options{ttl: time.Second})
 	ctx := t.Context()

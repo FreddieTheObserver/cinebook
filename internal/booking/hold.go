@@ -105,6 +105,9 @@ func (s *Service) Hold(ctx context.Context, showtimeID int64, customerRef string
 // GetHold reports a hold and its seats. No lock, so this is a snapshot rather
 // than an authority.
 func (s *Service) GetHold(ctx context.Context, token string) (*Hold, error) {
+	if !validHoldToken(token) {
+		return nil, ErrNotFound
+	}
 	held, err := s.store.GetHoldByToken(ctx, token)
 	if err != nil {
 		return nil, fromStore(store.Classify(err))
@@ -137,6 +140,9 @@ func (s *Service) GetHold(ctx context.Context, token string) (*Hold, error) {
 
 // Release gives seats back before the TTL lapses.
 func (s *Service) Release(ctx context.Context, token string) error {
+	if !validHoldToken(token) {
+		return ErrNotFound
+	}
 	held, err := s.store.GetHoldByToken(ctx, token)
 	if err != nil {
 		return fromStore(store.Classify(err))

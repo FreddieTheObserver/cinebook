@@ -139,3 +139,77 @@ func TestTotalMinor(t *testing.T) {
 		t.Fatalf("got %d, want 0", got)
 	}
 }
+
+func TestValidHoldToken(t *testing.T) {
+	for range 100 {
+		tok, err := newHoldToken()
+		if err != nil {
+			t.Fatalf("new token: %v", err)
+		}
+		if !validHoldToken(tok) {
+			t.Fatalf("generated token %q rejected", tok)
+		}
+	}
+
+	for _, bad := range []string{
+		"",
+		strings.Repeat("A", 25),
+		strings.Repeat("A", 27),
+		strings.Repeat("a", 26),
+		strings.Repeat("A", 25) + "1",
+		strings.Repeat("A", 25) + "\x00",
+		strings.Repeat("A", 24) + "\xc3\xa9",
+	} {
+		if validHoldToken(bad) {
+			t.Errorf("accepted %q", bad)
+		}
+	}
+}
+
+func TestValidBookingRef(t *testing.T) {
+	for range 100 {
+		ref, err := newBookingRef()
+		if err != nil {
+			t.Fatalf("new ref: %v", err)
+		}
+		if !validBookingRef(ref) {
+			t.Fatalf("generated ref %q rejected", ref)
+		}
+	}
+
+	for _, bad := range []string{
+		"",
+		"cb-7k2m-9qx4",
+		"XX-7K2M-9QX4",
+		"CB_7K2M-9QX4",
+		"CB-7K2M9-QX4",
+		"CB-7K2M-9QX",
+		"CB-7K2M-9QX45",
+		"CB-7K2M-9QXI",
+		"CB-7K2M-9QX\x00",
+	} {
+		if validBookingRef(bad) {
+			t.Errorf("accepted %q", bad)
+		}
+	}
+}
+
+// The nil store proves a malformed identifier never reaches the database.
+func TestMalformedIdentifiersAreNotFound(t *testing.T) {
+	svc := New(nil, Config{})
+	ctx := t.Context()
+	nul := strings.Repeat("A", 25) + "\x00"
+
+	if _, err := svc.GetHold(ctx, nul); !errors.Is(err, ErrNotFound) {
+		t.Errorf("GetHold: got %v, want ErrNotFound", err)
+	}
+	if err := svc.Release(ctx, nul); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Release: got %v, want ErrNotFound", err)
+	}
+	if _, err := svc.Confirm(ctx, nul, "key-1"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Confirm: got %v, want ErrNotFound", err)
+	}
+	if _, err := svc.GetBooking(ctx, "CB-0000-000\x00"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("GetBooking: got %v, want ErrNotFound", err)
+	}
+}

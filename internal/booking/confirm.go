@@ -17,6 +17,9 @@ func (s *Service) Confirm(ctx context.Context, token, idempotencyKey string) (*B
 	if idempotencyKey == "" {
 		return nil, fmt.Errorf("%w: an idempotency key is required", ErrInvalidSelection)
 	}
+	if !validHoldToken(token) {
+		return nil, ErrNotFound
+	}
 
 	held, err := s.store.GetHoldByToken(ctx, token)
 	if err != nil {
@@ -103,6 +106,9 @@ func (s *Service) Confirm(ctx context.Context, token, idempotencyKey string) (*B
 
 // GetBooking looks one up by reference. Booking reads take no lock.
 func (s *Service) GetBooking(ctx context.Context, ref string) (*Booking, error) {
+	if !validBookingRef(ref) {
+		return nil, ErrNotFound
+	}
 	booked, err := s.store.GetBookingByRef(ctx, ref)
 	if err != nil {
 		return nil, fromStore(store.Classify(err))

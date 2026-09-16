@@ -9,7 +9,7 @@ SEED       := internal/store/seed/0001_one_cinema.sql
 
 export CINEBOOK_DSN ?= postgres://cinebook:cinebook@localhost:5432/cinebook?sslmode=disable
 
-.PHONY: all build test vet lint sqlc sqlc-diff check db-up db-down seed \
+.PHONY: all build test vet lint sqlc sqlc-diff check db-up db-down seed seed-remote \
 	migrate-up migrate-down migrate-status migrate-cycle run loadgen clean
 
 all: check build
@@ -42,6 +42,15 @@ db-down:
 
 seed:
 	docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U cinebook -d cinebook < $(SEED)
+
+# For a database outside compose, such as a Render one, with its external URL in
+# CINEBOOK_DSN. psql runs in a throwaway container and reads the URL from its
+# environment, so no local psql is needed and the password stays off the
+# process list.
+seed-remote:
+	@case "$$CINEBOOK_DSN" in *@localhost[:/]*|*@127.0.0.1[:/]*) \
+		echo "seed-remote needs CINEBOOK_DSN set to a remote database URL; use make seed for compose" >&2; exit 1;; esac
+	docker run --rm -i -e CINEBOOK_DSN postgres:18 sh -c 'exec psql "$$CINEBOOK_DSN" -q -v ON_ERROR_STOP=1' < $(SEED)
 
 migrate-up:
 	$(GOOSE) -dir $(MIGRATIONS) postgres "$$CINEBOOK_DSN" up

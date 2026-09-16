@@ -123,6 +123,34 @@ The metrics worth a dashboard:
 | `cinebook_db_pool_empty_acquires_total` | Requests that had to wait for a connection. |
 | `cinebook_sweeper_reclaimed_seats_total`, `cinebook_sweeper_runs_total{result}` | Sweeper health. Correctness does not depend on it, but table size does. |
 
+## Deploying to Render
+
+`render.yaml` is a Render Blueprint for a free web service built from the `Dockerfile` and a free Postgres 18, both in Singapore.
+
+1. Push the repository to GitHub.
+2. In the Render dashboard, choose New, then Blueprint, and select the repository.
+   Render creates the database, builds the image and starts the service, which applies the migrations as it starts.
+3. Seed the database from your machine, using the external URL from the database's Connect menu:
+
+```sh
+read -rs CINEBOOK_DSN && export CINEBOOK_DSN    # paste the external URL
+make seed-remote
+```
+
+Run `make seed-remote` again whenever the demo needs another week of showtimes.
+After that, every push to the connected branch deploys automatically.
+
+What the free tier changes:
+
+- The service sleeps after 15 minutes without traffic and takes about a minute to wake, so the first page after a quiet spell is slow.
+- The database is deleted 30 days after it was created, after a 14-day grace period, and has no backups.
+  Recreate it from the dashboard and seed it again, or move to a paid plan.
+- The health check is `/healthz`, not `/readyz`.
+  Render restarts an instance that fails its check for a minute, and a restart cannot fix an unreachable database.
+  The listener only opens once migrations are done, so a new deploy still cannot take traffic early.
+- `/metrics` is public, because Render exposes a single port.
+  It carries request counts and pool statistics, and no customer data.
+
 ## Migrations
 
 `cinebook-api` applies its embedded migrations at startup.
@@ -212,6 +240,8 @@ internal/
     seed/*.sql             dev and test fixtures
     queries/*.sql          sqlc input
     gen/                   sqlc output
-.github/workflows/ci.yml   check, build, migration cycle
+.github/workflows/ci.yml   check, build, image, migration cycle
+Dockerfile                 static binary on distroless
+render.yaml                Render Blueprint
 Makefile
 ```

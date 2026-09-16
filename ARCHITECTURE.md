@@ -308,6 +308,8 @@ Defaults chosen, all configurable, all open to revision per section 12: hold TTL
   compose.yaml               Postgres 18 for local dev
   sqlc.yaml
   Makefile
+  Dockerfile                 static binary on a distroless image
+  render.yaml                Render Blueprint for a hosted demo
   .github/workflows/ci.yml
   ARCHITECTURE.md
 ```

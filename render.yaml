@@ -1,0 +1,30 @@
+# Render Blueprint: one web service serving the API and the browser UI from the
+# Docker image, and the Postgres it needs. Both use free instance types, so the
+# service sleeps when idle and the database expires 30 days after creation.
+
+services:
+  - type: web
+    name: cinebook
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    # Liveness rather than readiness: Render restarts an instance that fails
+    # this for a minute, and a restart cannot fix an unreachable database.
+    healthCheckPath: /healthz
+    envVars:
+      - key: CINEBOOK_DSN
+        fromDatabase:
+          name: cinebook-db
+          property: connectionString
+      # Render routes traffic to PORT, which is 10000 on every web service.
+      - key: CINEBOOK_ADDR
+        value: ":10000"
+
+databases:
+  - name: cinebook-db
+    plan: free
+    region: singapore
+    postgresMajorVersion: "18"
+    databaseName: cinebook
+    user: cinebook

@@ -214,6 +214,59 @@ func TestPingDoesNotQueueBehindASaturatedPool(t *testing.T) {
 	}
 }
 
+// A hosted demo is topped up by running the seed again, so a repeat must add
+// only what is missing and duplicate nothing.
+func TestSeedCanRunAgain(t *testing.T) {
+	s := newTestStore(t)
+	ctx := t.Context()
+
+	seed, err := seedFS.ReadFile("seed/0001_one_cinema.sql")
+	if err != nil {
+		t.Fatalf("read seed: %v", err)
+	}
+	apply := func() {
+		t.Helper()
+		if _, err := s.pool.Exec(ctx, string(seed)); err != nil {
+			t.Fatalf("apply seed: %v", err)
+		}
+	}
+	type counts struct{ movies, auditoriums, seats, showtimes, days int64 }
+	count := func() counts {
+		t.Helper()
+		const q = `
+SELECT (SELECT count(*) FROM movies),
+       (SELECT count(*) FROM auditoriums),
+       (SELECT count(*) FROM seats),
+       (SELECT count(*) FROM showtimes),
+       (SELECT count(DISTINCT (starts_at AT TIME ZONE 'Asia/Bangkok')::date)
+          FROM showtimes
+         WHERE starts_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Bangkok') AT TIME ZONE 'Asia/Bangkok')`
+		var c counts
+		if err := s.pool.QueryRow(ctx, q).Scan(&c.movies, &c.auditoriums, &c.seats, &c.showtimes, &c.days); err != nil {
+			t.Fatalf("count: %v", err)
+		}
+		return c
+	}
+
+	before := count()
+	if before.days < 7 {
+		t.Fatalf("seed covers %d days from today, want 7", before.days)
+	}
+	apply()
+	if again := count(); again != before {
+		t.Fatalf("second run changed the data: %+v, then %+v", before, again)
+	}
+
+	// The newest showtime keeps the ids other tests pick from undisturbed.
+	if _, err := s.pool.Exec(ctx, `DELETE FROM showtimes WHERE id = (SELECT max(id) FROM showtimes)`); err != nil {
+		t.Fatalf("delete showtime: %v", err)
+	}
+	apply()
+	if restored := count(); restored != before {
+		t.Fatalf("missing showtime not restored: %+v, want %+v", restored, before)
+	}
+}
+
 func TestHoldMarksSeatsHeld(t *testing.T) {
 	s := newTestStore(t)
 	ctx := t.Context()

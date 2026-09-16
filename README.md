@@ -141,13 +141,14 @@ All of them act on `CINEBOOK_DSN`.
 
 ## Seed data
 
-One cinema, two screens, 236 seats, three films and twelve showtimes across today and tomorrow, priced in satang.
+One cinema, two screens, 236 seats, three films, and six showtimes a day for the next seven days, priced in satang.
 
 ```sh
 make seed
 ```
 
-Running it twice is a no-op.
+Run it again whenever you like.
+Each run adds whatever is missing from the catalog and from the next seven days, and leaves holds and bookings alone, which is how a long-running demo stays current.
 It is deliberately not a migration, so that a replica applying migrations at startup cannot pick up demo rows.
 
 ## Tests

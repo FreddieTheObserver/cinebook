@@ -16,11 +16,11 @@ Built in horizontal layers, each complete before the next starts.
 | 1. Schema, liveness view, seed | Done |
 | 2. Store: sqlc queries, transaction helper, error classification | Done |
 | 3. Domain: hold, confirm, release, expire, seat map | Done |
-| 4. HTTP: handlers, middleware, problem+json | Not started |
+| 4. HTTP: handlers, middleware, problem+json | Done |
 | 5. Wiring: config, sweeper, metrics, health, Makefile, CI | Not started |
 
 There is no service binary yet.
-`cmd/cinebook-api` and `cmd/cinebook-loadgen` arrive in steps 4 and 5.
+`internal/httpapi` is a complete `http.Handler`, and `cmd/cinebook-api` wires it up in step 5 along with config and graceful shutdown.
 
 ## Requirements
 
@@ -78,6 +78,7 @@ go test -race ./...
 
 The centrepiece is `TestTwoHundredRacersForOneSeat`, which sends 200 goroutines after a single seat and asserts one winner, 199 conflicts, one live occupancy row, and zero unique violations.
 A unique violation there would mean the advisory lock failed to serialize and the index caught the fallout.
+It runs twice: against the domain layer, and again over HTTP, where it also asserts one `201`, 199 `409` responses naming the seat, and no error in the server log.
 
 ## Generated code
 
@@ -93,12 +94,12 @@ Never edit `internal/store/gen` by hand.
 ## Layout
 
 ```
-cmd/cinebook-api/          service binary        (step 4)
+cmd/cinebook-api/          service binary        (step 5)
 cmd/cinebook-loadgen/      contention load       (step 5)
 internal/
   booking/                 domain operations
   config/                  env parsing           (step 5)
-  httpapi/                 handlers, middleware  (step 4)
+  httpapi/                 handlers, middleware, problem+json
   obs/                     logging, metrics      (step 5)
   store/
     migrations/*.sql       goose, embedded

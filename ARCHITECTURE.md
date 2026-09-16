@@ -246,16 +246,33 @@ Status codes carry meaning, since a booking client has to branch on them:
 
 | Code | `type` slug | Meaning |
 | --- | --- | --- |
-| 409 | `seat-unavailable` | One or more seats are taken. The body lists exactly which ones, so the client can re-render the map without a second round trip. |
+| 409 | `seat-unavailable` | One or more seats are taken. The body lists exactly which ones in `seat_ids`, so the client can re-render the map without a second round trip. |
 | 410 | `hold-expired` | The hold lapsed before confirm. |
 | 422 | `invalid-selection` | Seat does not belong to this showtime, or too many seats requested. |
-| 429 | `rate-limited` | Per-customer request throttle. |
+| 429 | `rate-limited` | Per-customer request throttle. Includes `Retry-After`. |
 | 503 | `busy` | Lock timeout on a contended showtime. Includes `Retry-After`. |
 | 409 | `sales-closed` | The showtime is not selling seats. |
 | 409 | `hold-confirmed` | Release was asked for a hold that is already a booking. Undoing that is a refund, which is deferred. |
 | 422 | `idempotency-key-reused` | The key belongs to a booking made from a different hold. |
+| 400 | `invalid-request` | Malformed body, query parameter or header, including a missing `X-Customer-Ref` on hold or `Idempotency-Key` on confirm. |
+| 404 | `not-found` | No such showtime, hold, booking or route. A malformed id is a 404 as well, since it cannot name anything. |
+| 405 | `method-not-allowed` | The path exists, but not for this method. `Allow` lists the methods that do. |
+| 413 | `request-too-large` | The body is over 64 KiB. |
+| 415 | `unsupported-media-type` | A request body that is not `application/json`. |
+| 500 | `internal` | Anything unexpected. The detail is withheld, and the error is logged against the request id. |
 
-Defaults chosen, all configurable, all open to revision per section 12: hold TTL is 7 minutes, and a single hold covers at most 10 seats.
+The `type` member is the slug under `/problems/`, for example `/problems/seat-unavailable`.
+RFC 9457 recommends against a bare relative reference, because it would resolve differently under every resource.
+
+`X-Customer-Ref` and `Idempotency-Key` are 1 to 255 visible ASCII characters.
+A confirm replay answers `201` with the original booking, so a client that lost the first response sees exactly what it would have seen.
+Responses carry `Cache-Control: no-store`, since seat maps go stale in seconds and holds and bookings carry bearer capabilities.
+Access logs record the matched route and never the path, for the same reason.
+
+The throttle is a token bucket per `X-Customer-Ref`, and requests without that header are not throttled in process.
+Behind a load balancer the remote address says nothing about who is asking, so anonymous traffic is left to the edge.
+
+Defaults chosen, all configurable, all open to revision per section 12: hold TTL is 7 minutes, a single hold covers at most 10 seats, and the throttle allows 5 requests per second with a burst of 20.
 
 ## 7. Repo layout
 
@@ -315,6 +332,7 @@ Stated plainly, because they are consequences of the choices above rather than o
 - Postgres is a single point of failure and the global throughput ceiling.
 - The advisory lock keyspace reservation is a convention, enforced by this document rather than by the type system.
 - Seat map reads are slightly stale by design.
+- The request throttle lives in process memory, so with N replicas one customer can reach N times the configured rate. A shared limit needs shared state, which is not worth adding while `X-Customer-Ref` is itself unauthenticated.
 
 ## 11. Deferred
 

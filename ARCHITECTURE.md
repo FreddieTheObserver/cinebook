@@ -4,7 +4,7 @@ A concurrent cinema seat booking service in Go.
 The single hard requirement is that a seat in a showtime can never be sold twice, under any amount of concurrency, crash, or clock skew.
 Everything below is chosen to make that property provable rather than hopeful.
 
-Status: decisions pinned, no application code written yet.
+Status: all five steps of section 8 are built.
 Last updated: 2026-09-16.
 
 ## 1. Scope

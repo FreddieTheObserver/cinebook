@@ -29,7 +29,7 @@ Development happens inside WSL2 Ubuntu 26.04, because that is where the Go toolc
 | Module | `github.com/layaungphyo/cinebook` |
 | Go | 1.26.0 (linux/amd64) |
 | Postgres | 18, run as a container |
-| Windows path | `C:\Users\user\cinebook` is left empty and unused |
+| Windows path | None. There is no Windows-side working copy, and one should not be recreated. |
 
 ### One prerequisite action
 

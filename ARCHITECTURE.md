@@ -301,6 +301,7 @@ Defaults chosen, all configurable, all open to revision per section 12: hold TTL
   compose.yaml               Postgres 18 for local dev
   sqlc.yaml
   Makefile
+  .github/workflows/ci.yml
   ARCHITECTURE.md
 ```
 

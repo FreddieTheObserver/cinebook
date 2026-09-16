@@ -7,6 +7,20 @@ Every write path that touches seats serializes on a per-showtime advisory lock, 
 `ARCHITECTURE.md` explains the reasoning, the concurrency model and the trade-offs.
 This file is only about running it.
 
+## Live demo
+
+https://cinebook-saqb.onrender.com
+
+The demo runs on Render's free plan, and its limits can look like bugs:
+
+- The first page after a quiet spell can take about a minute, because the service sleeps after 15 minutes without visitors.
+- If a film shows no upcoming showtimes, the demo's week of seed data has run out and has not been topped up yet.
+- If the site does not load at all, or loads with no films, the free database has most likely expired.
+  Render deletes free databases 30 days after they are created.
+
+None of these are faults in the service itself.
+To see everything working regardless, run it locally as described below.
+
 ## Status
 
 Built in horizontal layers, each complete before the next starts.

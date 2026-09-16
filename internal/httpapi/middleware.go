@@ -11,6 +11,8 @@ import (
 
 type loggerKey struct{}
 
+const unmatchedRoute = "unmatched"
+
 func loggerFrom(ctx context.Context) *slog.Logger {
 	if log, ok := ctx.Value(loggerKey{}).(*slog.Logger); ok {
 		return log
@@ -53,13 +55,19 @@ func (a *api) instrument(next http.Handler) http.Handler {
 			}
 
 			// Not the path: hold tokens and booking references in it are bearer
-			// capabilities, and do not belong in logs.
+			// capabilities, and would also give metrics unbounded cardinality.
+			route := r.Pattern
+			if route == "" {
+				route = unmatchedRoute
+			}
+			elapsed := time.Since(start)
+			a.observer.ObserveRequest(route, rec.status, elapsed)
 			log.Info("request",
 				"method", r.Method,
-				"route", r.Pattern,
+				"route", route,
 				"status", rec.status,
 				"bytes", rec.bytes,
-				"duration", time.Since(start),
+				"duration", elapsed,
 			)
 
 			if v != nil {

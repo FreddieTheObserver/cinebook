@@ -88,9 +88,10 @@ type options struct {
 }
 
 type env struct {
-	server *httptest.Server
-	store  *store.Store
-	logs   *logSink
+	server   *httptest.Server
+	store    *store.Store
+	logs     *logSink
+	observed *observations
 }
 
 func newEnv(t *testing.T, opt options) *env {
@@ -122,12 +123,37 @@ func newEnv(t *testing.T, opt options) *env {
 		t.Fatalf("reset booking state: %v", err)
 	}
 
-	logs := &logSink{}
+	logs, observed := &logSink{}, &observations{}
 	svc := booking.New(st, booking.Config{HoldTTL: opt.ttl})
-	server := httptest.NewServer(New(svc, slog.New(logs), Config{RatePerSecond: opt.rate, RateBurst: opt.burst}))
+	handler := New(svc, slog.New(logs), observed, Config{RatePerSecond: opt.rate, RateBurst: opt.burst})
+	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
-	return &env{server: server, store: st, logs: logs}
+	return &env{server: server, store: st, logs: logs, observed: observed}
+}
+
+type observations struct {
+	mu       sync.Mutex
+	routes   []string
+	raceLost int
+}
+
+func (o *observations) ObserveRequest(route string, _ int, _ time.Duration) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.routes = append(o.routes, route)
+}
+
+func (o *observations) SeatRaceLost() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.raceLost++
+}
+
+func (o *observations) snapshot() ([]string, int) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return slices.Clone(o.routes), o.raceLost
 }
 
 type logSink struct {
@@ -752,12 +778,13 @@ func TestRequestID(t *testing.T) {
 	}
 }
 
-func TestAccessLogNamesTheRouteNotThePath(t *testing.T) {
+func TestLogsAndMetricsNameTheRouteNotThePath(t *testing.T) {
 	e := newEnv(t, options{})
 	showtimeID, seats := showtimeSeats(t, e.store, 1)
 
 	held := decode[holdJSON](t, expectStatus(t, e.hold(t, showtimeID, "cust-a", seats...), http.StatusCreated))
 	expectStatus(t, e.get(t, "/v1/holds/"+held.Token), http.StatusOK)
+	expectStatus(t, e.get(t, "/v1/holds/"+held.Token+"/nope"), http.StatusNotFound)
 
 	var routes []string
 	for _, r := range e.logs.snapshot() {
@@ -771,14 +798,17 @@ func TestAccessLogNamesTheRouteNotThePath(t *testing.T) {
 			return true
 		})
 	}
-	want := []string{"POST /v1/showtimes/{id}/holds", "GET /v1/holds/{token}"}
+	want := []string{"POST /v1/showtimes/{id}/holds", "GET /v1/holds/{token}", "unmatched"}
 	if !slices.Equal(routes, want) {
-		t.Fatalf("got routes %v, want %v", routes, want)
+		t.Fatalf("got logged routes %v, want %v", routes, want)
+	}
+	if observed, _ := e.observed.snapshot(); !slices.Equal(observed, want) {
+		t.Fatalf("got observed routes %v, want %v", observed, want)
 	}
 }
 
 // The centrepiece of section 9, over the wire. A unique violation still reaches
-// the client as a 409, so the server log is the only place it can show up.
+// the client as a 409, so only the server's own signals can show it.
 func TestTwoHundredRacersForOneSeat(t *testing.T) {
 	e := newEnv(t, options{lockTimeout: 30 * time.Second, maxConns: 25})
 	showtimeID, seats := showtimeSeats(t, e.store, 1)
@@ -831,6 +861,9 @@ func TestTwoHundredRacersForOneSeat(t *testing.T) {
 	}
 	if errs := e.logs.errorMessages(); len(errs) > 0 {
 		t.Errorf("server logged %d errors, first: %s", len(errs), errs[0])
+	}
+	if _, raceLost := e.observed.snapshot(); raceLost != 0 {
+		t.Errorf("%d racers hit the unique index: the advisory lock did not serialize them", raceLost)
 	}
 	if statuses[http.StatusCreated] != 1 || statuses[http.StatusConflict] != racers-1 {
 		t.Errorf("got statuses %v, want one 201 and %d 409", statuses, racers-1)

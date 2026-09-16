@@ -3,6 +3,7 @@ package httpapi
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/FreddieTheObserver/cinebook/internal/booking"
 )
@@ -28,22 +29,33 @@ func (c *Config) applyDefaults() {
 	}
 }
 
+// Observer receives what the API measures.
+type Observer interface {
+	// ObserveRequest is called once per request. Route is the matched pattern,
+	// or "unmatched", so it never carries anything from the path.
+	ObserveRequest(route string, status int, elapsed time.Duration)
+	// SeatRaceLost is called when the unique index caught a double claim.
+	SeatRaceLost()
+}
+
 type api struct {
-	svc     *booking.Service
-	log     *slog.Logger
-	limiter *limiter
-	mux     *http.ServeMux
+	svc      *booking.Service
+	log      *slog.Logger
+	observer Observer
+	limiter  *limiter
+	mux      *http.ServeMux
 }
 
 // New returns the handler for every /v1 route, with errors answered as
 // application/problem+json.
-func New(svc *booking.Service, log *slog.Logger, cfg Config) http.Handler {
+func New(svc *booking.Service, log *slog.Logger, observer Observer, cfg Config) http.Handler {
 	cfg.applyDefaults()
 	a := &api{
-		svc:     svc,
-		log:     log,
-		limiter: newLimiter(cfg.RatePerSecond, cfg.RateBurst),
-		mux:     http.NewServeMux(),
+		svc:      svc,
+		log:      log,
+		observer: observer,
+		limiter:  newLimiter(cfg.RatePerSecond, cfg.RateBurst),
+		mux:      http.NewServeMux(),
 	}
 
 	a.handle("GET /v1/movies", a.listMovies)

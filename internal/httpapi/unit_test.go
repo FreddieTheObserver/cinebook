@@ -298,7 +298,7 @@ func panicValue(f func()) (v any) {
 
 func TestInstrumentTurnsAPanicIntoAProblem(t *testing.T) {
 	logs := &logSink{}
-	a := &api{log: slog.New(logs)}
+	a := &api{log: slog.New(logs), observer: &observations{}}
 	h := a.instrument(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("boom") }))
 
 	rec := httptest.NewRecorder()
@@ -314,7 +314,7 @@ func TestInstrumentTurnsAPanicIntoAProblem(t *testing.T) {
 }
 
 func TestInstrumentAbortsAPanicAfterHeadersAreSent(t *testing.T) {
-	a := &api{log: slog.New(&logSink{})}
+	a := &api{log: slog.New(&logSink{}), observer: &observations{}}
 	h := a.instrument(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		panic("boom")

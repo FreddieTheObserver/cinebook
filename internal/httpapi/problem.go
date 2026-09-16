@@ -133,6 +133,7 @@ func (a *api) fail(w http.ResponseWriter, r *http.Request, err error) {
 	p := problemFor(err)
 	switch {
 	case errors.Is(err, store.ErrSeatRaceLost):
+		a.observer.SeatRaceLost()
 		log.Error("unique index caught a double claim that the advisory lock should have prevented", "err", err)
 	case p.problemType == internalError:
 		log.Error("request failed", "err", err)

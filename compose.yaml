@@ -1,0 +1,27 @@
+# Local development database only.
+# Integration tests do not use this file; they bring up their own container
+# via testcontainers, so that a test run never depends on machine state.
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cinebook}
+      POSTGRES_USER: ${POSTGRES_USER:-cinebook}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cinebook}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # Postgres 18 images put PGDATA in a subdirectory, so the mount is one level up.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      # The database name is passed explicitly, otherwise pg_isready probes a
+      # database named after the OS user and reports healthy against nothing.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cinebook} -d ${POSTGRES_DB:-cinebook}"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+
+volumes:
+  pgdata:

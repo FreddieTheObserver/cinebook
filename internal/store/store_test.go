@@ -325,27 +325,36 @@ func TestConfirmedSeatsOutliveTheirExpiry(t *testing.T) {
 	}
 }
 
+// insertBooking writes without ON CONFLICT, so the constraint actually raises
+// and Classify has something to map.
+func insertBooking(t *testing.T, s *Store, ref string, holdID, showtimeID int64, customer, key string) error {
+	t.Helper()
+
+	const q = `
+INSERT INTO bookings (ref, hold_id, showtime_id, customer_ref, total_minor, currency, idempotency_key)
+VALUES ($1, $2, $3, $4, 22000, 'THB', $5)`
+	_, err := s.pool.Exec(t.Context(), q, ref, holdID, showtimeID, customer, key)
+	return err
+}
+
 func TestDuplicateIdempotencyKeyIsClassified(t *testing.T) {
 	s := newTestStore(t)
 	showtimeID, seats := showtimeWithSeats(t, s, 2)
 
-	err := s.InShowtimeTx(t.Context(), showtimeID, func(ctx context.Context, q *gen.Queries) error {
-		first := hold(t, ctx, q, showtimeID, token("A"), "cust-a", 420, seats[:1])
-		second := hold(t, ctx, q, showtimeID, token("B"), "cust-a", 420, seats[1:])
+	var first, second gen.Hold
+	if err := s.InShowtimeTx(t.Context(), showtimeID, func(ctx context.Context, q *gen.Queries) error {
+		first = hold(t, ctx, q, showtimeID, token("A"), "cust-a", 420, seats[:1])
+		second = hold(t, ctx, q, showtimeID, token("B"), "cust-a", 420, seats[1:])
+		return nil
+	}); err != nil {
+		t.Fatalf("holds: %v", err)
+	}
 
-		book := func(h gen.Hold, ref string) error {
-			_, err := q.CreateBooking(ctx, gen.CreateBookingParams{
-				Ref: ref, HoldID: h.ID, ShowtimeID: showtimeID, CustomerRef: "cust-a",
-				TotalMinor: 22000, Currency: "THB", IdempotencyKey: "same-key",
-			})
-			return err
-		}
-		if err := book(first, "CB-7K2M-9QX4"); err != nil {
-			return fmt.Errorf("first booking: %w", err)
-		}
-		return book(second, "CB-7K2M-9QX5")
-	})
-	if !errors.Is(err, ErrDuplicateBooking) {
+	if err := insertBooking(t, s, "CB-7K2M-9QX4", first.ID, showtimeID, "cust-a", "same-key"); err != nil {
+		t.Fatalf("first booking: %v", err)
+	}
+	err := insertBooking(t, s, "CB-7K2M-9QX5", second.ID, showtimeID, "cust-a", "same-key")
+	if !errors.Is(Classify(err), ErrDuplicateBooking) {
 		t.Fatalf("got %v, want ErrDuplicateBooking", err)
 	}
 }
@@ -354,23 +363,55 @@ func TestOneBookingPerHold(t *testing.T) {
 	s := newTestStore(t)
 	showtimeID, seats := showtimeWithSeats(t, s, 1)
 
-	err := s.InShowtimeTx(t.Context(), showtimeID, func(ctx context.Context, q *gen.Queries) error {
-		h := hold(t, ctx, q, showtimeID, token("A"), "cust-a", 420, seats)
+	var h gen.Hold
+	if err := s.InShowtimeTx(t.Context(), showtimeID, func(ctx context.Context, q *gen.Queries) error {
+		h = hold(t, ctx, q, showtimeID, token("A"), "cust-a", 420, seats)
+		return nil
+	}); err != nil {
+		t.Fatalf("hold: %v", err)
+	}
 
-		book := func(ref, key string) error {
+	if err := insertBooking(t, s, "CB-7K2M-9QX4", h.ID, showtimeID, "cust-a", "key-one"); err != nil {
+		t.Fatalf("first booking: %v", err)
+	}
+	err := insertBooking(t, s, "CB-7K2M-9QX5", h.ID, showtimeID, "cust-a", "key-two")
+	if !errors.Is(Classify(err), ErrHoldAlreadyBooked) {
+		t.Fatalf("got %v, want ErrHoldAlreadyBooked", err)
+	}
+}
+
+// CreateBooking carries ON CONFLICT DO NOTHING, so a conflict must come back as
+// an empty result with the transaction still usable.
+func TestCreateBookingSuppressesConflict(t *testing.T) {
+	s := newTestStore(t)
+	showtimeID, seats := showtimeWithSeats(t, s, 2)
+
+	err := s.InShowtimeTx(t.Context(), showtimeID, func(ctx context.Context, q *gen.Queries) error {
+		first := hold(t, ctx, q, showtimeID, token("A"), "cust-a", 420, seats[:1])
+		second := hold(t, ctx, q, showtimeID, token("B"), "cust-a", 420, seats[1:])
+
+		book := func(h gen.Hold, ref, key string) error {
 			_, err := q.CreateBooking(ctx, gen.CreateBookingParams{
 				Ref: ref, HoldID: h.ID, ShowtimeID: showtimeID, CustomerRef: "cust-a",
 				TotalMinor: 22000, Currency: "THB", IdempotencyKey: key,
 			})
 			return err
 		}
-		if err := book("CB-7K2M-9QX4", "key-one"); err != nil {
+		if err := book(first, "CB-7K2M-9QX4", "same-key"); err != nil {
 			return fmt.Errorf("first booking: %w", err)
 		}
-		return book("CB-7K2M-9QX5", "key-two")
+		if err := book(second, "CB-7K2M-9QX5", "same-key"); !IsInsertConflict(err) {
+			return fmt.Errorf("second booking returned %v, want a suppressed conflict", err)
+		}
+
+		// The transaction must still be usable after the suppressed conflict.
+		if _, err := q.GetBookingByHold(ctx, first.ID); err != nil {
+			return fmt.Errorf("transaction unusable after conflict: %w", err)
+		}
+		return nil
 	})
-	if !errors.Is(err, ErrHoldAlreadyBooked) {
-		t.Fatalf("got %v, want ErrHoldAlreadyBooked", err)
+	if err != nil {
+		t.Fatalf("conflict handling: %v", err)
 	}
 }
 

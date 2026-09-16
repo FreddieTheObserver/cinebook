@@ -7,6 +7,7 @@ package gen
 
 import (
 	"context"
+	"time"
 )
 
 const claimSeats = `-- name: ClaimSeats :execrows
@@ -132,14 +133,27 @@ func (q *Queries) FindSeatConflicts(ctx context.Context, arg FindSeatConflictsPa
 }
 
 const getHoldByToken = `-- name: GetHoldByToken :one
-SELECT id, token, showtime_id, customer_ref, expires_at, confirmed_at, released_at, created_at
+SELECT id, token, showtime_id, customer_ref, expires_at, confirmed_at, released_at, created_at,
+       (released_at IS NULL AND (confirmed_at IS NOT NULL OR expires_at > now()))::boolean AS live
   FROM holds
  WHERE token = $1
 `
 
-func (q *Queries) GetHoldByToken(ctx context.Context, token string) (Hold, error) {
+type GetHoldByTokenRow struct {
+	ID          int64
+	Token       string
+	ShowtimeID  int64
+	CustomerRef string
+	ExpiresAt   time.Time
+	ConfirmedAt *time.Time
+	ReleasedAt  *time.Time
+	CreatedAt   time.Time
+	Live        bool
+}
+
+func (q *Queries) GetHoldByToken(ctx context.Context, token string) (GetHoldByTokenRow, error) {
 	row := q.db.QueryRow(ctx, getHoldByToken, token)
-	var i Hold
+	var i GetHoldByTokenRow
 	err := row.Scan(
 		&i.ID,
 		&i.Token,
@@ -149,6 +163,7 @@ func (q *Queries) GetHoldByToken(ctx context.Context, token string) (Hold, error
 		&i.ConfirmedAt,
 		&i.ReleasedAt,
 		&i.CreatedAt,
+		&i.Live,
 	)
 	return i, err
 }

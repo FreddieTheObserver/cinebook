@@ -175,7 +175,8 @@ Shedding load is preferable to exhausting the pool.
 | --- | --- |
 | Two clients hold the same seat simultaneously | Both serialize on the showtime advisory lock. The second sees a live occupancy row and gets `409`. |
 | Confirm arrives at the instant the hold expires | Confirm takes the same lock and re-asserts liveness against the database clock in its `UPDATE` predicate, then checks that the affected row count equals the seat count. Whoever holds the lock first wins, deterministically. |
-| The same confirm request is delivered twice | `bookings.idempotency_key` is unique. A `23505` on that key returns the existing booking with `200` instead of creating a second one. |
+| The same confirm request is delivered twice | Confirm re-reads the hold under the lock, and returns the booking that already exists rather than making another. The idempotency key is checked before anything is written, because confirming the seats and only then rejecting the key would strand them. |
+| A generated booking reference collides | The insert carries `ON CONFLICT DO NOTHING`, so the collision returns no row instead of aborting the transaction, and another reference is drawn. Five attempts, then the request fails. |
 | Client crashes mid-hold | The hold lapses on its TTL and is reclaimed by the next contender for those seats. |
 | Server crashes mid-transaction | The transaction rolls back and the advisory lock releases with the connection. There is no cleanup step to forget to run. |
 | Sweeper races a confirm | Both take the showtime lock, so they cannot interleave. |
@@ -250,6 +251,9 @@ Status codes carry meaning, since a booking client has to branch on them:
 | 422 | `invalid-selection` | Seat does not belong to this showtime, or too many seats requested. |
 | 429 | `rate-limited` | Per-customer request throttle. |
 | 503 | `busy` | Lock timeout on a contended showtime. Includes `Retry-After`. |
+| 409 | `sales-closed` | The showtime is not selling seats. |
+| 409 | `hold-confirmed` | Release was asked for a hold that is already a booking. Undoing that is a refund, which is deferred. |
+| 422 | `idempotency-key-reused` | The key belongs to a booking made from a different hold. |
 
 Defaults chosen, all configurable, all open to revision per section 12: hold TTL is 7 minutes, and a single hold covers at most 10 seats.
 
@@ -261,7 +265,7 @@ Defaults chosen, all configurable, all open to revision per section 12: hold TTL
   cmd/cinebook-loadgen/      contention load generator
   internal/
     config/                  env parsing
-    booking/                 domain: hold, confirm, release, seat map
+    booking/                 domain: hold, confirm, release, expire, seat map
     store/
       migrations/*.sql       goose, embedded
       seed/*.sql             dev and test fixtures, never applied in production

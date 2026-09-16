@@ -30,7 +30,8 @@ SELECT h.showtime_id, unnest(sqlc.arg('seat_ids')::bigint[]), h.id, h.expires_at
  WHERE h.id = sqlc.arg('hold_id');
 
 -- name: GetHoldByToken :one
-SELECT id, token, showtime_id, customer_ref, expires_at, confirmed_at, released_at, created_at
+SELECT id, token, showtime_id, customer_ref, expires_at, confirmed_at, released_at, created_at,
+       (released_at IS NULL AND (confirmed_at IS NOT NULL OR expires_at > now()))::boolean AS live
   FROM holds
  WHERE token = $1;
 

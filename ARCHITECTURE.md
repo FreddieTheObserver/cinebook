@@ -171,6 +171,10 @@ A transaction that cannot get the showtime lock in time fails fast with `55P03`,
 Shedding load is preferable to exhausting the pool.
 `pgxpool` max connections is set explicitly rather than left at the `4 * NumCPU` default, since the ceiling on concurrent booking transactions is a capacity decision and not an accident of core count.
 
+The readiness probe must not join that queue.
+The showtime lock is database wide, so a hot premiere saturates the pool on every replica at once, and a probe waiting for a connection would take them all out of rotation together.
+A pool with every connection checked out is reachable by definition, so readiness reports it ready and leaves load shedding to the `503` above.
+
 ### 4.7 The races, and where each one dies
 
 | Race | Resolution |

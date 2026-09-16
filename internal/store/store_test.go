@@ -192,6 +192,28 @@ func TestConcurrentMigrationsOnAFreshDatabase(t *testing.T) {
 	}
 }
 
+func TestPingDoesNotQueueBehindASaturatedPool(t *testing.T) {
+	s, err := New(t.Context(), Config{DSN: testDSN, MaxConns: 2})
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	t.Cleanup(s.Close)
+
+	for range 2 {
+		conn, err := s.pool.Acquire(t.Context())
+		if err != nil {
+			t.Fatalf("acquire: %v", err)
+		}
+		t.Cleanup(conn.Release)
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+	defer cancel()
+	if err := s.Ping(ctx); err != nil {
+		t.Fatalf("saturated pool reported unreachable: %v", err)
+	}
+}
+
 func TestHoldMarksSeatsHeld(t *testing.T) {
 	s := newTestStore(t)
 	ctx := t.Context()

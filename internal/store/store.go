@@ -80,8 +80,15 @@ func New(ctx context.Context, cfg Config) (*Store, error) {
 // Close releases the pool and every connection in it.
 func (s *Store) Close() { s.pool.Close() }
 
-// Ping reports whether the pool can still reach the database.
-func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
+// Ping reports whether the pool can still reach the database. A pool with every
+// connection checked out is reachable by definition, and a probe queued behind
+// a hot showtime's transactions would report that contention as an outage.
+func (s *Store) Ping(ctx context.Context) error {
+	if stat := s.pool.Stat(); stat.AcquiredConns() >= stat.MaxConns() {
+		return nil
+	}
+	return s.pool.Ping(ctx)
+}
 
 // Pool exposes the underlying pool for callers that need it directly.
 func (s *Store) Pool() *pgxpool.Pool { return s.pool }

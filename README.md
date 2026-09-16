@@ -34,6 +34,8 @@ make run        # applies migrations, then listens on :8080
 make seed       # in another shell, once the service has migrated
 ```
 
+Then open http://localhost:8080 for the browser UI, or talk to the API directly:
+
 ```sh
 curl -s localhost:8080/v1/showtimes
 curl -s localhost:8080/v1/showtimes/1/seats
@@ -44,6 +46,26 @@ curl -si -X POST localhost:8080/v1/holds/<token>/confirm -H 'Idempotency-Key: fi
 ```
 
 Section 6 of `ARCHITECTURE.md` lists every route and every error type.
+
+## Browser UI
+
+The binary serves a small UI at `/`, next to the API at `/v1/`, from files embedded in it.
+It is plain HTML, CSS and ES modules, so there is nothing to install or build.
+
+| Page | API |
+| --- | --- |
+| Films and showtimes | `GET /v1/movies`, `GET /v1/showtimes?movie_id=&from=` |
+| Seat grid, refreshed every five seconds | `GET /v1/showtimes/{id}`, `GET /v1/showtimes/{id}/seats` |
+| Hold, with a countdown to `expires_at` | `POST /v1/showtimes/{id}/holds`, `GET /v1/holds/{token}` |
+| Confirm or release | `POST /v1/holds/{token}/confirm`, `DELETE /v1/holds/{token}` |
+| Booking | `GET /v1/bookings/{ref}` |
+
+The customer is a random `demo-` id kept in this browser's local storage and sent as `X-Customer-Ref` when holding seats.
+It makes plain that the header is a stub for a sign-in that does not exist yet.
+Clear site data to become a different customer, or open a private window to race yourself for a seat.
+
+The Go tests check that the pages load, that every module import resolves, and that no view builds markup from strings.
+There is no browser test in CI.
 
 ## Local database
 
@@ -182,6 +204,7 @@ internal/
   booking/                 domain operations and catalog reads
   config/                  env parsing
   httpapi/                 handlers, middleware, problem+json
+  web/                     browser UI, embedded
   obs/                     logging, metrics, health
   store/
     migrations/*.sql       goose, embedded

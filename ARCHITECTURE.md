@@ -45,6 +45,7 @@ Docker Desktop 29 on Windows has WSL integration enabled for Ubuntu, so `docker 
 | Metrics | `prometheus/client_golang` at `/metrics` | The interesting numbers are contention numbers, and they need to be observable rather than inferred. |
 | Errors on the wire | RFC 9457 `application/problem+json` | Stable machine-readable `type` slugs, so clients branch on a string and not on prose. |
 | Tests | `testcontainers-go` plus stdlib `testing` | Real Postgres, since the logic under test is Postgres locking semantics. Mocks would test nothing. |
+| Browser UI | Plain HTML, CSS and ES modules, embedded with `embed.FS` and served by the same binary | Same origin as the API, so the custom `X-Customer-Ref` header needs no CORS layer. No dependency and no build step for a handful of pages. |
 
 Total direct dependency count is five.
 That is deliberate.
@@ -247,6 +248,8 @@ GET    /v1/bookings/{ref}
 GET    /healthz    liveness, no dependencies
 GET    /readyz     readiness, checks the pool
 GET    /metrics    prometheus
+
+GET    /           browser UI, routed in the URL fragment
 ```
 
 Status codes carry meaning, since a booking client has to branch on them:
@@ -278,6 +281,8 @@ Access logs record the matched route and never the path, for the same reason.
 
 The throttle is a token bucket per `X-Customer-Ref`, and requests without that header are not throttled in process.
 Behind a load balancer the remote address says nothing about who is asking, so anonymous traffic is left to the edge.
+The browser UI sends the header only when creating a hold, the one request that requires it, so browsing never spends a customer's throttle.
+Its routes live in the URL fragment, so hold tokens and booking references in its links never reach a server log or a `Referer`.
 
 Defaults chosen, all configurable, all open to revision per section 12: hold TTL is 7 minutes, a single hold covers at most 10 seats, and the throttle allows 5 requests per second with a burst of 20.
 
@@ -298,6 +303,7 @@ Defaults chosen, all configurable, all open to revision per section 12: hold TTL
       store.go tx.go         pool, transaction helper
       errors.go              Postgres error codes to sentinels
     httpapi/                 handlers, middleware, problem+json
+    web/                     browser UI, embedded
     obs/                     slog, prometheus, health
   compose.yaml               Postgres 18 for local dev
   sqlc.yaml

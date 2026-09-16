@@ -50,6 +50,13 @@ func TestProblemForCarriesTheBlockingSeats(t *testing.T) {
 	}
 }
 
+func TestInvalidSelectionDetailDoesNotRepeatTheTitle(t *testing.T) {
+	got := problemFor(fmt.Errorf("%w: 11 seats requested, at most 10 per hold", booking.ErrInvalidSelection))
+	if got.detail != "11 seats requested, at most 10 per hold" {
+		t.Fatalf("got detail %q", got.detail)
+	}
+}
+
 func TestProblemForHidesInternalDetail(t *testing.T) {
 	if got := problemFor(errors.New("password authentication failed for user cinebook")); got.detail != "" {
 		t.Fatalf("internal error leaked detail %q", got.detail)

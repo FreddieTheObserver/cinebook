@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/FreddieTheObserver/cinebook/internal/booking"
@@ -105,7 +106,12 @@ func problemFor(err error) *problem {
 	case errors.Is(err, booking.ErrNotFound):
 		return &problem{problemType: notFound}
 	case errors.Is(err, booking.ErrInvalidSelection):
-		return &problem{problemType: invalidSelection, detail: err.Error()}
+		// The domain words these as "invalid selection: <reason>", and the
+		// title already says the first half.
+		return &problem{
+			problemType: invalidSelection,
+			detail:      strings.TrimPrefix(err.Error(), booking.ErrInvalidSelection.Error()+": "),
+		}
 	case errors.Is(err, booking.ErrHoldExpired):
 		return &problem{problemType: holdExpired}
 	case errors.Is(err, booking.ErrSalesClosed):

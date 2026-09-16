@@ -215,8 +215,14 @@ SELECT st.id, min(seat.id), max(seat.id)
 		if r := call(t, http.MethodGet, base+"/v1/movies", "", nil); r.status != http.StatusOK || !strings.Contains(r.body, `"movies"`) {
 			t.Errorf("movies: got %d %s", r.status, r.body)
 		}
-		if r := call(t, http.MethodGet, base+"/", "", nil); r.status != http.StatusNotFound || r.header.Get("Content-Type") != "application/problem+json" {
-			t.Errorf("unknown path: got %d %q", r.status, r.header.Get("Content-Type"))
+		if r := call(t, http.MethodGet, base+"/v1/nothing-here", "", nil); r.status != http.StatusNotFound || r.header.Get("Content-Type") != "application/problem+json" {
+			t.Errorf("unknown API path: got %d %q", r.status, r.header.Get("Content-Type"))
+		}
+		if r := call(t, http.MethodGet, base+"/", "", nil); r.status != http.StatusOK || !strings.Contains(r.body, `src="/js/app.js"`) {
+			t.Errorf("UI: got %d %.80q", r.status, r.body)
+		}
+		if r := call(t, http.MethodGet, base+"/js/api.js", "", nil); r.status != http.StatusOK {
+			t.Errorf("UI script: got %d", r.status)
 		}
 
 		metrics := call(t, http.MethodGet, base+"/metrics", "", nil).body

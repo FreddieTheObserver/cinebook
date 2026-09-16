@@ -18,6 +18,7 @@ import (
 	"github.com/FreddieTheObserver/cinebook/internal/httpapi"
 	"github.com/FreddieTheObserver/cinebook/internal/obs"
 	"github.com/FreddieTheObserver/cinebook/internal/store"
+	"github.com/FreddieTheObserver/cinebook/internal/web"
 )
 
 // The write timeout sits well past the lock and statement timeouts, so it only
@@ -73,10 +74,11 @@ func run(ctx context.Context, getenv func(string) string, stdout io.Writer) erro
 	mux.HandleFunc("GET /healthz", health.Live)
 	mux.HandleFunc("GET /readyz", health.Ready)
 	mux.Handle("GET /metrics", metrics.Handler())
-	mux.Handle("/", httpapi.New(svc, log, metrics, httpapi.Config{
+	mux.Handle("/v1/", httpapi.New(svc, log, metrics, httpapi.Config{
 		RatePerSecond: cfg.RatePerSecond,
 		RateBurst:     cfg.RateBurst,
 	}))
+	mux.Handle("/", web.Handler())
 
 	srv := &http.Server{
 		Handler:           mux,

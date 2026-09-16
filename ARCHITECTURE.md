@@ -39,7 +39,7 @@ Docker Desktop 29 on Windows has WSL integration enabled for Ubuntu, so `docker 
 | HTTP router | stdlib `net/http` `ServeMux` | Since Go 1.22 it does method and wildcard patterns, which is the only thing a framework was ever needed for here. No dependency, no framework lifecycle, no migration debt. |
 | Postgres driver | `jackc/pgx/v5` with `pgxpool` | Native protocol rather than `database/sql`. Gives typed `pgconn.PgError` codes, which the booking path needs in order to tell a unique violation (`23505`) from a lock timeout (`55P03`). |
 | Query layer | `sqlc` | The SQL stays hand written and reviewable, which matters when the SQL *is* the concurrency control. Generated Go gives compile-time checked structs and no hand-rolled `Scan` boilerplate. |
-| Migrations | `pressly/goose` with `embed.FS` | Embedded in the binary, so a replica cannot run against a schema it was not built for. Simpler failure modes than golang-migrate dirty-state handling. |
+| Migrations | `pressly/goose` with `embed.FS` | Embedded in the binary, so a replica cannot run against a schema it was not built for. Simpler failure modes than golang-migrate dirty-state handling. The library only: its CLI imports a driver for every database it supports, which would add around 70 indirect modules, so it is run as a pinned `go run ...@version` instead of entering `go.mod`. |
 | Config | Env vars, small hand-written typed loader | Around 40 lines. A config library here would be more surface than substance. |
 | Logging | stdlib `log/slog`, JSON handler | Structured, stdlib, request-scoped child logger carrying a request id. |
 | Metrics | `prometheus/client_golang` at `/metrics` | The interesting numbers are contention numbers, and they need to be observable rather than inferred. |
@@ -193,7 +193,8 @@ A hold token and a booking reference are bearer-like capabilities, so they are u
 movies       (id, title, runtime_min, rating, ...)
 auditoriums  (id, name, ...)
 seats        (id, auditorium_id, row_label, seat_num, kind)     -- physical seats
-showtimes    (id, movie_id, auditorium_id, starts_at, price_minor, currency, sales_open)
+showtimes    (id, movie_id, auditorium_id, starts_at, ends_at, price_minor, currency, sales_open)
+  EXCLUDE (auditorium_id WITH =, tstzrange(starts_at, ends_at) WITH &&)
 
 holds        (id, token unique, showtime_id, customer_ref,
               expires_at, confirmed_at, released_at, created_at)
@@ -203,12 +204,22 @@ seat_occupancy (id, showtime_id, seat_id, hold_id,
   UNIQUE (showtime_id, seat_id) WHERE released_at IS NULL
 
 bookings     (id, ref unique, hold_id unique, showtime_id, customer_ref,
-              total_minor, currency, idempotency_key unique, created_at)
+              total_minor, currency, idempotency_key, created_at)
+  UNIQUE (customer_ref, idempotency_key)
 ```
 
 `seat_occupancy` carries the one invariant that matters, so it is kept deliberately narrow.
 `expires_at` is denormalized onto it from `holds` so that the reclaim step in section 4.3 is a single-table `UPDATE` with no join inside the critical section.
 Money is stored as integer minor units with an explicit currency column, never as a float.
+Seeded data is priced in THB, so a minor unit is one satang.
+
+An auditorium cannot run two films at once, so `showtimes` carries an exclusion constraint over the interval each screening occupies.
+That needs `ends_at` as a stored column rather than a generated one, because `timestamptz + interval` is `STABLE` and not `IMMUTABLE`, and because an index expression cannot reach `movies.runtime_min` in another table.
+`ends_at` is when the auditorium is free again, so it covers trailers and turnaround and not only the feature runtime.
+
+`bookings.idempotency_key` is unique per customer rather than globally.
+The key is chosen by the client, so a global constraint would let one customer's `1` collide with another's.
+It is `NOT NULL`, which makes the `Idempotency-Key` header mandatory on confirm rather than optional.
 
 ## 6. API surface
 
@@ -252,6 +263,7 @@ Defaults chosen, all configurable, all open to revision per section 12: hold TTL
     booking/                 domain: hold, confirm, release, seat map
     store/
       migrations/*.sql       goose, embedded
+      seed/*.sql             dev and test fixtures, never applied in production
       queries/*.sql          sqlc input, the SQL that matters
       gen/                   sqlc output, generated
       store.go tx.go         pool, transaction helper, error classification
@@ -265,6 +277,7 @@ Defaults chosen, all configurable, all open to revision per section 12: hold TTL
 
 Everything lives under `internal/`, so the module exports nothing and there is no accidental public API to keep stable.
 Migrations sit inside `internal/store` because `embed.FS` cannot reach outside its own package directory.
+Seed data sits beside them rather than inside them, so that a replica running migrations at boot cannot acquire demo rows.
 
 ## 8. Implementation order
 
@@ -274,7 +287,7 @@ Built in horizontal layers, each one complete before the next starts.
 2. **Store.** All sqlc queries, the transaction helper, `lock_timeout` handling, and error classification for `23505` and `55P03`.
 3. **Domain.** Hold, confirm, release, expire, and the seat map projection, together with the contention tests.
 4. **HTTP.** All handlers, middleware, problem+json mapping, and request validation.
-5. **Wiring and operability.** Config, graceful shutdown, the sweeper goroutine, metrics, health checks, compose, Makefile, and CI.
+5. **Wiring and operability.** Config, graceful shutdown, the sweeper goroutine, metrics, health checks, Makefile, and CI.
 
 ## 9. Testing
 
@@ -309,6 +322,6 @@ Defaults are in place for all of these, so none of them block starting work.
 
 1. Hold TTL of 7 minutes: about right for a cinema with no payment step in the flow, probably too short once payment lands.
 2. Maximum of 10 seats per hold.
-3. Currency: which one is the default for seeded data.
-4. Whether a customer may hold seats across several showtimes at once, or only one active hold at a time.
-5. Whether `409` should return the whole refreshed seat map rather than just the conflicting seat ids.
+3. Whether a customer may hold seats across several showtimes at once, or only one active hold at a time.
+4. Whether `409` should return the whole refreshed seat map rather than just the conflicting seat ids.
+5. Turnaround between screenings is 15 minutes in the seed, which is a scheduling policy that belongs to an admin interface once one exists.

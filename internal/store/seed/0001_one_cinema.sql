@@ -12,6 +12,7 @@ DECLARE
     screen2     bigint;
     base        timestamp;
     d           integer;
+    turnaround  interval := interval '15 min';
 BEGIN
     IF EXISTS (SELECT 1 FROM auditoriums) THEN
         RAISE NOTICE 'seed: already applied, nothing to do';
@@ -42,13 +43,19 @@ BEGIN
     base := date_trunc('day', now() AT TIME ZONE 'Asia/Bangkok');
 
     FOR d IN 0..1 LOOP
-        INSERT INTO showtimes (movie_id, auditorium_id, starts_at, price_minor, currency) VALUES
-            (dune,        screen1, (base + make_interval(days => d, hours => 13))             AT TIME ZONE 'Asia/Bangkok', 18000, 'THB'),
-            (dune,        screen1, (base + make_interval(days => d, hours => 16, mins => 30)) AT TIME ZONE 'Asia/Bangkok', 22000, 'THB'),
-            (dune,        screen1, (base + make_interval(days => d, hours => 20))             AT TIME ZONE 'Asia/Bangkok', 26000, 'THB'),
-            (spirited,    screen2, (base + make_interval(days => d, hours => 14))             AT TIME ZONE 'Asia/Bangkok', 18000, 'THB'),
-            (oppenheimer, screen2, (base + make_interval(days => d, hours => 17, mins => 15)) AT TIME ZONE 'Asia/Bangkok', 22000, 'THB'),
-            (oppenheimer, screen2, (base + make_interval(days => d, hours => 21))             AT TIME ZONE 'Asia/Bangkok', 26000, 'THB');
+        INSERT INTO showtimes (movie_id, auditorium_id, starts_at, ends_at, price_minor, currency)
+        SELECT v.movie_id, v.auditorium_id, v.starts_at,
+               v.starts_at + make_interval(mins => m.runtime_min) + turnaround,
+               v.price_minor, 'THB'
+          FROM (VALUES
+                    (dune,        screen1, (base + make_interval(days => d, hours => 13))             AT TIME ZONE 'Asia/Bangkok', 18000),
+                    (dune,        screen1, (base + make_interval(days => d, hours => 16, mins => 30)) AT TIME ZONE 'Asia/Bangkok', 22000),
+                    (dune,        screen1, (base + make_interval(days => d, hours => 20))             AT TIME ZONE 'Asia/Bangkok', 26000),
+                    (spirited,    screen2, (base + make_interval(days => d, hours => 14))             AT TIME ZONE 'Asia/Bangkok', 18000),
+                    (oppenheimer, screen2, (base + make_interval(days => d, hours => 17, mins => 15)) AT TIME ZONE 'Asia/Bangkok', 22000),
+                    (oppenheimer, screen2, (base + make_interval(days => d, hours => 21))             AT TIME ZONE 'Asia/Bangkok', 26000)
+               ) AS v(movie_id, auditorium_id, starts_at, price_minor)
+          JOIN movies m ON m.id = v.movie_id;
     END LOOP;
 END $$;
 

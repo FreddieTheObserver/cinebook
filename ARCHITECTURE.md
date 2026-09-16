@@ -30,16 +30,7 @@ Development happens inside WSL2 Ubuntu 26.04, because that is where the Go toolc
 | Go | 1.26.0 (linux/amd64) |
 | Postgres | 18, run as a container |
 
-### One prerequisite action
-
-Docker Desktop 29 is installed on Windows but its WSL integration is switched off, so there is no Docker socket inside Ubuntu.
-The integration test strategy in section 9 depends on a Docker daemon reachable from WSL.
-
-Enable it in Docker Desktop under Settings, Resources, WSL Integration, and tick Ubuntu.
-After that, `docker info` should work from inside WSL.
-
-If you would rather not depend on Docker Desktop, the fallback is `apt install postgresql-18` in Ubuntu and running integration tests against that local server.
-That works, but it makes test runs depend on machine state instead of being self-contained, so the Docker path is preferred.
+Docker Desktop 29 on Windows has WSL integration enabled for Ubuntu, so `docker info` works from inside WSL and the integration test strategy in section 9 has the daemon it depends on.
 
 ## 3. Stack
 

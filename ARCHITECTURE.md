@@ -26,7 +26,7 @@ Development happens inside WSL2 Ubuntu 26.04, because that is where the Go toolc
 | Thing | Value |
 | --- | --- |
 | Repo | `~/cinebook` in WSL |
-| Module | `github.com/layaungphyo/cinebook` |
+| Module | `github.com/FreddieTheObserver/cinebook` |
 | Go | 1.26.0 (linux/amd64) |
 | Postgres | 18, run as a container |
 

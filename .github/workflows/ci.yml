@@ -20,6 +20,12 @@ jobs:
       # Integration tests start their own Postgres through the runner's Docker.
       - run: make test
 
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build --tag cinebook-api .
+
   migrations:
     runs-on: ubuntu-latest
     services:

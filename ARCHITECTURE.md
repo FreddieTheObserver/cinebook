@@ -25,11 +25,10 @@ Development happens inside WSL2 Ubuntu 26.04, because that is where the Go toolc
 
 | Thing | Value |
 | --- | --- |
-| Repo | `~/cinebook` in WSL (reachable from Windows at `\\wsl$\Ubuntu\home\lyp\cinebook`) |
+| Repo | `~/cinebook` in WSL |
 | Module | `github.com/layaungphyo/cinebook` |
 | Go | 1.26.0 (linux/amd64) |
 | Postgres | 18, run as a container |
-| Windows path | None. There is no Windows-side working copy, and one should not be recreated. |
 
 ### One prerequisite action
 
